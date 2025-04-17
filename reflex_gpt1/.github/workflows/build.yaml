@@ -1,56 +1,42 @@
 name: Build and Push Container
 
 on:
-  workflow_dispatch:        # Allows manual run
-  push:
-    branches: [ "main" ]    # Only on pushes to the main branch
-    paths:                  # Only when these files/folders are changed
-      - "Dockerfile.production"
-      - "compose.prod.yaml"
-      - "requirements.txt"
-      - assets/
-      - reflex_gpt/
-      - rxconfig.py
-      - alembic.ini
-      - alembic/
-      - .github/workflows/main.yaml
-
+  workflow_dispatch:  # Manual trigger
+  push:               # Automatic trigger
+    branches:
+      - main          # Runs on push to main (no path filter)
 
 env:
- # DOCKER_IMAGE: codingforentrepreneurs/reflex-gpt
-  # uncomment if using 
-   DOCKER_IMAGE: ${{ secrets.DOCKERHUB_REPO }}
+  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_REPO }}
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-    - name: Login to DockerHub
-      uses: docker/login-action@v2
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    # For Reflex to build a container,
-    # injecting your environment variables at 
-    # container build time is often required.
-    - name: Create build env file
-      run: |
-         cat << EOF > .build-env
-         OPENAI_API_KEY=${{secrets.OPENAI_API_KEY}}
-         DATABASE_URL=${{ secrets.DATABASE_URL }}
-         EOF
+      - name: Create build env file
+        run: |
+          cat << EOF > .build-env
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
+          EOF
 
-    - name: Build and push
-      run: |
-        docker build -f Dockerfile.production -t ${{ env.DOCKER_IMAGE }}:latest .
-        docker tag ${{ env.DOCKER_IMAGE }}:latest ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
-        docker push ${{ env.DOCKER_IMAGE }} --all-tags
+      - name: Build and push
+        run: |
+          docker build -f Dockerfile.production -t ${{ env.DOCKER_IMAGE }}:latest .
+          docker tag ${{ env.DOCKER_IMAGE }}:latest ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
+          docker push ${{ env.DOCKER_IMAGE }}:latest
+          docker push ${{ env.DOCKER_IMAGE }}:${{ github.sha }}
 
-    - name: Remove build env file
-      run: rm .build-env
+      - name: Remove build env file
+        run: rm .build-env
