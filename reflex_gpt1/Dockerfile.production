@@ -1,58 +1,58 @@
+# Use a lightweight Python base image
 FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
+# Define build-time ARG for Node version
 ARG NODE_VERSION=20.x
 
-# Install necessary tools, Node.js, and unzip
+# Install system dependencies, Node.js, and clean up
 RUN apt-get update && apt-get install -y \
     curl \
     libpq-dev \
     gnupg \
     unzip \
-    && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION} | bash - \
-    && apt-get install -y nodejs \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+ && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION} | bash - \
+ && apt-get install -y nodejs \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
-# Verify Node.js installation
+# Verify installations
 RUN node --version && npm --version
 
-# Create reflex user
+# Add a new user for running the app
 RUN adduser --disabled-password --home /app reflex
 
-# Set up Python environment
+# Set up a virtual environment for Python
 RUN python -m venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Copy the application files
+# Copy all files and set ownership
 COPY --chown=reflex:reflex . /app
 
-# Move .build-env to .env if it exists
+# Optional: move .build-env to .env if it exists
 RUN if [ -f .build-env ]; then mv .build-env .env; fi
 
-# Set permissions
+# Fix file ownership and permissions
 RUN chown -R reflex:reflex /app
 
-# Switch to reflex user
+# Switch to non-root user
 USER reflex
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Initialize Reflex
-RUN reflex init
+# Initialize Reflex project (optional: remove .env afterward)
+RUN reflex init && rm -f .env
 
-# Remove .env file after reflex init
-RUN rm -f .env
-
-# Ensure all environment variables are set
+# Set environment variables
 ENV PATH="/app/.venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 ENV NODE_PATH="/usr/lib/node_modules"
 ENV REFLEX_DB_URL="sqlite:///reflex.db"
 
-# Needed until Reflex properly passes SIGTERM on backend.
+# Handle shutdown correctly
 STOPSIGNAL SIGKILL
 
-# Always apply migrations before starting the backend.
+# Final command: apply DB migrations and start backend
 CMD ["sh", "-c", "reflex db migrate && reflex run --env prod --backend-only"]
