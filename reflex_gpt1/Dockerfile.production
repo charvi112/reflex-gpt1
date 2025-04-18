@@ -1,58 +1,59 @@
-# Use a lightweight Python base image
+# Use slim Python base image
 FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
 
-# Define build-time ARG for Node version
+# Install Node.js and necessary packages
 ARG NODE_VERSION=20.x
-
-# Install system dependencies, Node.js, and clean up
 RUN apt-get update && apt-get install -y \
     curl \
     libpq-dev \
     gnupg \
     unzip \
- && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION} | bash - \
- && apt-get install -y nodejs \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+    && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION} | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Verify installations
-RUN node --version && npm --version
+# Confirm Node.js and npm are installed
+RUN node -v && npm -v
 
-# Add a new user for running the app
+# Create app user (non-root)
 RUN adduser --disabled-password --home /app reflex
 
-# Set up a virtual environment for Python
+# Set up Python virtual environment
 RUN python -m venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Copy all files and set ownership
+# Copy project files
 COPY --chown=reflex:reflex . /app
 
-# Optional: move .build-env to .env if it exists
-RUN if [ -f .build-env ]; then mv .build-env .env; fi
+# If `.build-env` exists, rename it to `.env`
+RUN [ -f .build-env ] && mv .build-env .env || true
 
-# Fix file ownership and permissions
+# Set permissions for app directory
 RUN chown -R reflex:reflex /app
 
 # Switch to non-root user
 USER reflex
 
-# Install Python dependencies
+# Install Python requirements
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Initialize Reflex project (optional: remove .env afterward)
-RUN reflex init && rm -f .env
+# Initialize Reflex app (generates static files, etc.)
+RUN reflex init
 
-# Set environment variables
-ENV PATH="/app/.venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+# Clean up .env after initialization
+RUN rm -f .env
+
+# Environment configuration
 ENV NODE_PATH="/usr/lib/node_modules"
 ENV REFLEX_DB_URL="sqlite:///reflex.db"
+ENV PATH="/app/.venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
-# Handle shutdown correctly
+# Make sure container stops immediately when killed
 STOPSIGNAL SIGKILL
 
-# Final command: apply DB migrations and start backend
+# Default command to run on container start
 CMD ["sh", "-c", "reflex db migrate && reflex run --env prod --backend-only"]
