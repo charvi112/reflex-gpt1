@@ -1,0 +1,44 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ARG NODE_VERSION=20.x
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    libpq-dev \
+    gnupg \
+    unzip \
+    && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION} | bash - \
+    && apt-get install -y nodejs \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN node --version && npm --version
+
+RUN adduser --disabled-password --home /app reflex
+
+RUN python -m venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+
+COPY --chown=reflex:reflex . /app
+
+RUN if [ -f .build-env ]; then mv .build-env .env; fi
+
+RUN chown -R reflex:reflex /app
+
+USER reflex
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+RUN reflex init
+
+RUN rm -f .env
+
+ENV PATH="/app/.venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+ENV NODE_PATH="/usr/lib/node_modules"
+ENV REFLEX_DB_URL="sqlite:///reflex.db"
+
+STOPSIGNAL SIGKILL
+
+CMD ["sh", "-c", "reflex db migrate && reflex run --env prod --backend-only"]
