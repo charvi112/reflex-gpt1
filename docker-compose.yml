@@ -1,0 +1,21 @@
+version: '3.9'
+
+services:
+  reflex-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reflex-app
+    restart: unless-stopped
+    environment:
+      - REFLEX_DB_URL=sqlite:///reflex.db
+      - NODE_PATH=/usr/lib/node_modules
+      - PATH=/app/.venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH
+    volumes:
+      - .:/app
+    ports:
+      - "8000:3002"  # Change if reflex uses a different port
+    stop_signal: SIGKILL
+    command: >
+      sh -c "reflex db migrate &&
+             reflex run --env prod --backend-only"
